@@ -7,10 +7,6 @@ from threading import Thread
 from dotenv import load_dotenv
 import os
 
-# Enable WebSocket tracing for debugging (optional, comment out if not needed)
-# websocket.enableTrace(True)
-
-# Load environment variables from .env file
 load_dotenv()
 
 class CryptoWSClient:
@@ -23,13 +19,13 @@ class CryptoWSClient:
         if not self.api_key or not self.api_secret:
             raise ValueError("API_KEY and API_SECRET must be set in the .env file.")
 
-        # Use updated URLs from documentation
         self.ws_url = os.getenv("WS_URL") or (
             "wss://uat-stream.3ona.co/exchange/v1/user" if self.environment == "sandbox"
             else "wss://stream.crypto.com/exchange/v1/user"
         )
         self.ws = None
         self.authenticated = False
+        self.id = 0
 
     def _generate_signature(self, method, id, nonce):
         """Generate HMAC-SHA256 signature for authentication."""
@@ -42,10 +38,17 @@ class CryptoWSClient:
         ).hexdigest()
         print(f"Generated signature: {signature} for string: {sign_str}")
         return signature
+    
+    def _generate_nonce(self):
+        return int(time.time() * 1000)
+    
+    def _generate_id(self):
+        self.id = self.id +1
+        return self.id
 
     def _authenticate(self):
         """Prepare and return authentication request."""
-        id = 1
+        id = self._generate_id()
         method = "public/auth"
         nonce = int(time.time() * 1000)
         sig = self._generate_signature(method, id, nonce)
@@ -54,7 +57,7 @@ class CryptoWSClient:
             "method": method,
             "api_key": self.api_key,
             "sig": sig,
-            "nonce": nonce
+            "nonce": self._generate_nonce()
         }
         print("Sending authentication request:", json.dumps(auth_request, indent=2))
         return json.dumps(auth_request)
@@ -95,8 +98,9 @@ class CryptoWSClient:
     def on_close(self, ws, close_status_code, close_msg):
         """Handle WebSocket closure."""
         print(f"WebSocket connection closed: {close_status_code} - {close_msg}")
+        self.authenticated = False  # Reset authenticated state
 
-    def start(self, request):
+    def start(self):
         """Start the WebSocket client and send the initial request."""
         print(f"Attempting connection to {self.ws_url}")
         self.ws = websocket.WebSocketApp(
@@ -111,15 +115,34 @@ class CryptoWSClient:
         ws_thread.daemon = True
         ws_thread.start()
 
+        # Wait for connection and authentication
         while not self.ws.sock or not self.authenticated:
             time.sleep(1)
 
-        print("Sending request:", json.dumps(request, indent=2))
-        self.ws.send(json.dumps(request))
+        print("Connection establised.")
 
+    def send_message(self, message):
+        """Send a JSON message over the WebSocket connection."""
+        if self.ws and self.ws.sock and self.authenticated:
+            # Create a copy of the message to avoid modifying the original
+            message_copy = message.copy()
+            if "nonce" not in message_copy:
+                message_copy["nonce"] = self._generate_nonce()
+            if "id" not in message_copy:
+                message_copy["id"] = self._generate_id()
+
+            json_message = json.dumps(message_copy)
+            print("Sending message:", json.dumps(message_copy, indent=2))
+            self.ws.send(json_message)
+        else:
+            print("Cannot send message: WebSocket is not connected or not authenticated.")
+
+    def run(self):
+        """Keep the main thread alive."""
         try:
             while True:
                 time.sleep(1)
         except KeyboardInterrupt:
-            self.ws.close()
+            if self.ws:
+                self.ws.close()
             print("Client stopped.")
