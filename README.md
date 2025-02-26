@@ -85,6 +85,13 @@ Supported methods include subscribe, unsubscribe, and others as per the [Crypto.
   - `ENVIRONMENT=UAT`: UAT Sandbox (`wss://uat-stream.3ona.co/v1/user`).
   - `ENVIRONMENT=production`: Production (`wss://stream.crypto.com/v1/user`).
 
+## Multiple Parameter Sets
+You can use different `.env` files for multiple API key/secret pairs:
+- Create files like `.env.1`, `.env.2`, etc., with different credentials.
+- Specify the set when initializing:
+  ```python
+  client = CryptoWSClient(env="1")  # Loads .env.1
+
 ## Dependencies
 Listed in `requirements.txt`:
 - `websocket-client`: For WebSocket communication.

@@ -7,11 +7,21 @@ from threading import Thread
 from dotenv import load_dotenv
 import os
 
-load_dotenv()
-
 class CryptoWSClient:
-    def __init__(self):
-        """Initialize the WebSocket client with values from .env."""
+    def __init__(self, env=None):
+        """Initialize the WebSocket client with values from a specified .env file."""
+        # Determine the .env file based on param_set
+        if env:
+            dotenv_path = f".env.{env}"
+        else:
+            dotenv_path = ".env"
+        
+        # Load the specified .env file
+        if not os.path.exists(dotenv_path):
+            raise FileNotFoundError(f"Environment file {dotenv_path} not found.")
+        load_dotenv(dotenv_path)
+        print(f"Loaded environment from {dotenv_path}")
+
         self.api_key = os.getenv("API_KEY")
         self.api_secret = os.getenv("API_SECRET")
         self.environment = os.getenv("ENVIRONMENT", "production").lower()
@@ -20,7 +30,7 @@ class CryptoWSClient:
             raise ValueError("API_KEY and API_SECRET must be set in the .env file.")
 
         self.ws_url = os.getenv("WS_URL") or (
-            "wss://uat-stream.3ona.co/exchange/v1/user" if self.environment == "sandbox"
+            "wss://uat-stream.3ona.co/exchange/v1/user" if self.environment == "uat"
             else "wss://stream.crypto.com/exchange/v1/user"
         )
         self.ws = None
